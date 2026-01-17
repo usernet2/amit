@@ -1,0 +1,5 @@
+adherent_id;periodicite_paiement_id;dispensaire_id;type_cotisation_id;adresse;date_adhesion;suspendu;email;tel;date_suspendu;date_radie
+1;1;1;1;LOT II S 138 ANJANAHARY;15/02/1991;2;;;0000-00-00 00:00:00;22/11/2016 11:23
+2;1;1;1;LOT ITV 27 TER  ANDRANANAHOATRA  -ITAOSY;23/04/1991;0;annie.r@hk_jurifisc_mada.com;032 05 352 92 / 020 22 352 92;0000-00-00 00:00:00;0000-00-00 00:00:00
+3;1;6;1;LOT II N 171 BIS AA ANALAMAHITSY;11/03/1992;2;;;0000-00-00 00:00:00;30/07/2019 13:34
+4;1;2;1;IMMEUBLE  TANA 2000 ANKORONDRANO;01/01/1999;2;;;0000-00-00 00:00:00;22/11/2016 11:23

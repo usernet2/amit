@@ -1,0 +1,9 @@
+@import './AdminCommon.css';
+
+.sensibilisations-table table tbody tr {
+  transition: background-color 0.2s;
+}
+
+.sensibilisations-table table tbody tr:hover {
+  background-color: #f5f5f5;
+}
