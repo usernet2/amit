@@ -20,12 +20,14 @@ api.interceptors.request.use(
 
 // AUTH SERVICE
 export const authServiceV2 = {
-  registerAdherant: (email, password, raison_sociale, siege, contact, centre_id) =>
-    api.post('/auth/register-adherant', { email, password, raison_sociale, siege, contact, centre_id }),
-  sendConfirmationCode: (email, raison_sociale) =>
-    api.post('/auth/send-confirmation-code', { email, raison_sociale }),
-  registerAdherantWithCode: (email, password, raison_sociale, siege, contact, telephone, centre_id, confirmationCode) =>
-    api.post('/auth/register-adherant-confirmed', { email, password, raison_sociale, siege, contact, telephone, centre_id, confirmationCode }),
+  checkAdherent: (raison_sociale, telephone) =>
+    api.post('/auth/check-adherent', { raison_sociale, telephone }),
+  registerUser: (email, password, adherent_id) =>
+    api.post('/auth/register-user', { email, password, adherent_id }),
+  sendConfirmationCode: (adherent_id, adherent_email) =>
+    api.post('/auth/send-confirmation-code', { adherent_id, adherent_email }),
+  registerUserWithConfirmation: (email, password, adherent_id, adherent_email, confirmation_code) =>
+    api.post('/auth/register-user-with-confirmation', { email, password, adherent_id, adherent_email, confirmation_code }),
   login: (email, password) =>
     api.post('/auth/login', { email, password }),
   forgotPassword: (email) =>
@@ -85,6 +87,8 @@ export const adminServiceV2 = {
   // Entreprises CRUD
   getEntreprises: () =>
     api.get('/admin/entreprises'),
+  searchEntreprises: (q) =>
+    api.get('/admin/entreprises/search', { params: { q } }),
   getEntrepriseById: (id) =>
     api.get(`/admin/entreprises/${id}`),
   updateEntreprise: (id, data) =>

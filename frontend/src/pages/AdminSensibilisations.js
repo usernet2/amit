@@ -11,6 +11,8 @@ export default function AdminSensibilisations() {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [adherentSearch, setAdherentSearch] = useState('');
+  const [filteredAdherents, setFilteredAdherents] = useState([]);
   const [formData, setFormData] = useState({
     sujet: '',
     date: '',
@@ -23,12 +25,10 @@ export default function AdminSensibilisations() {
 
   const fetchData = async () => {
     try {
-      const [sensRes, adhRes] = await Promise.all([
-        adminServiceV2.getSensibilisations(),
-        adminServiceV2.getEntreprises(),
-      ]);
+      const sensRes = await adminServiceV2.getSensibilisations();
       setSensibilisations(sensRes.data);
-      setAdherents(adhRes.data);
+      // Don't fetch all enterprises - search on demand
+      setAdherents([]);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -97,6 +97,8 @@ export default function AdminSensibilisations() {
     setShowModal(false);
     setEditingId(null);
     setFormData({ sujet: '', date: '', adherent_id: '' });
+    setAdherentSearch('');
+    setFilteredAdherents([]);
   };
 
   const handleLogout = () => {
@@ -212,19 +214,42 @@ export default function AdminSensibilisations() {
               </div>
               <div className="form-group">
                 <label>Adhérent*</label>
-                <select
-                  name="adherent_id"
-                  value={formData.adherent_id}
-                  onChange={handleInputChange}
-                  required
-                >
-                  <option value="">-- Sélectionner un adhérent --</option>
-                  {adherents.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.raison_sociale}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  type="text"
+                  placeholder="Tapez le numéro ou le nom (ex: 2 ou Entreprise 2)..."
+                  value={adherentSearch}
+                  onChange={async (e) => {
+                    const searchValue = e.target.value;
+                    setAdherentSearch(searchValue);
+                    if (searchValue.trim()) {
+                      try {
+                        const res = await adminServiceV2.searchEntreprises(searchValue);
+                        setFilteredAdherents(res.data);
+                      } catch (error) {
+                        console.error('Error searching enterprises:', error);
+                      }
+                    } else {
+                      setFilteredAdherents([]);
+                    }
+                  }}
+                />
+                {filteredAdherents.length > 0 && (
+                  <div style={{ border: '1px solid #ddd', maxHeight: '250px', overflowY: 'auto', marginTop: '5px', backgroundColor: 'white', zIndex: 10 }}>
+                    {filteredAdherents.map(a => (
+                      <div
+                        key={a.id}
+                        onClick={() => {
+                          setFormData({ ...formData, adherent_id: a.id });
+                          setAdherentSearch(a.raison_sociale);
+                          setFilteredAdherents([]);
+                        }}
+                        style={{ padding: '10px', cursor: 'pointer', borderBottom: '1px solid #eee', backgroundColor: formData.adherent_id === a.id ? '#e8f4f8' : 'white' }}
+                      >
+                        {a.raison_sociale}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="modal-buttons">
                 <button type="submit" className="btn-primary">

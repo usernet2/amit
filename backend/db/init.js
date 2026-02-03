@@ -49,6 +49,23 @@ const initDatabase = async () => {
       )
     `);
 
+    // Create Médecins Chefs table
+    await connection.execute(`
+      CREATE TABLE IF NOT EXISTS medecinchefs (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL UNIQUE,
+        centre_id INT NOT NULL,
+        nom VARCHAR(100),
+        prenom VARCHAR(100),
+        specialisation VARCHAR(150),
+        contact VARCHAR(20),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        FOREIGN KEY (centre_id) REFERENCES centres(id) ON DELETE RESTRICT
+      )
+    `);
+
     // Create Visite d'Entreprise table
     await connection.execute(`
       CREATE TABLE IF NOT EXISTS visite_entreprise (

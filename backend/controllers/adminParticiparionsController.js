@@ -37,6 +37,8 @@ exports.getParticipations = async (req, res) => {
 exports.createParticipation = async (req, res) => {
   try {
     const { formation_id, adherent_id, date_deb, date_fin } = req.body;
+    
+    console.log('Received participation data:', { formation_id, adherent_id, date_deb, date_fin });
 
     if (!formation_id || !adherent_id || !date_deb || !date_fin) {
       return res
@@ -48,7 +50,7 @@ exports.createParticipation = async (req, res) => {
 
     // Verify formation exists
     const [formationCheck] = await connection.execute(
-      'SELECT id FROM formations WHERE id = ? AND is_valid = true',
+      'SELECT id FROM formations WHERE id = ?',
       [formation_id]
     );
 
@@ -68,19 +70,7 @@ exports.createParticipation = async (req, res) => {
       return res.status(404).json({ message: 'Adherent not found' });
     }
 
-    // Check if participation already exists
-    const [existingParticipation] = await connection.execute(
-      'SELECT id FROM participer WHERE formation_id = ? AND adherent_id = ? AND is_valid = true',
-      [formation_id, adherent_id]
-    );
-
-    if (existingParticipation.length > 0) {
-      connection.release();
-      return res
-        .status(409)
-        .json({ message: 'Adherent already participates in this formation' });
-    }
-
+    // Insert participation record
     const [result] = await connection.execute(
       'INSERT INTO participer (date_deb, date_fin, formation_id, adherent_id, is_valid) VALUES (?, ?, ?, ?, true)',
       [date_deb, date_fin, formation_id, adherent_id]
@@ -94,6 +84,13 @@ exports.createParticipation = async (req, res) => {
     });
   } catch (error) {
     console.error('Create participation error:', error);
+    console.error('Error details:', { message: error.message, code: error.code, sql: error.sql });
+    
+    // Handle duplicate entry error
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({ message: 'Cette participation existe déjà pour cet adhérant et cette formation' });
+    }
+    
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };

@@ -61,19 +61,7 @@ export default function MedecinChefDashboard() {
       <div className="stats-grid">
         <div className="stat-card">
           <h3>{stats?.totalEntreprises || 0}</h3>
-          <p>Entreprises</p>
-        </div>
-        <div className="stat-card">
-          <h3>{stats?.visitesActive || 0}</h3>
-          <p>Visites</p>
-        </div>
-        <div className="stat-card">
-          <h3>{stats?.formations || 0}</h3>
-          <p>Formations</p>
-        </div>
-        <div className="stat-card">
-          <h3>{stats?.sensibilisations || 0}</h3>
-          <p>Sensibilisations</p>
+          <p>Entreprises Affiliées</p>
         </div>
       </div>
 
@@ -197,7 +185,7 @@ export default function MedecinChefDashboard() {
                     <tr key={sens.id}>
                       <td>{sens.sujet}</td>
                       <td>{new Date(sens.date).toLocaleDateString()}</td>
-                      <td>{sens.raison_sociale}</td>
+                      <td>{sens.raison_sociale || 'N/A'}</td>
                       <td>{sens.is_valid ? '✅ Active' : '❌ Annulée'}</td>
                     </tr>
                   ))}

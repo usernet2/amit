@@ -18,6 +18,9 @@ export default function AdminParticipations() {
     date_deb: '',
     date_fin: '',
   });
+  const [formationSearch, setFormationSearch] = useState('');
+  const [adherentSearch, setAdherentSearch] = useState('');
+  const [filteredAdherents, setFilteredAdherents] = useState([]);
 
   useEffect(() => {
     fetchData();
@@ -25,14 +28,14 @@ export default function AdminParticipations() {
 
   const fetchData = async () => {
     try {
-      const [partRes, adhRes, formRes] = await Promise.all([
+      const [partRes, formRes] = await Promise.all([
         adminServiceV2.getParticipations(),
-        adminServiceV2.getEntreprises(),
         adminServiceV2.getFormations(),
       ]);
       setParticipations(partRes.data);
-      setAdherents(adhRes.data);
       setFormations(formRes.data);
+      // Don't fetch all enterprises anymore - we'll search on demand
+      setAdherents([]);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -66,11 +69,18 @@ export default function AdminParticipations() {
     }
 
     try {
+      const submitData = {
+        formation_id: parseInt(formData.formation_id),
+        adherent_id: parseInt(formData.adherent_id),
+        date_deb: formData.date_deb,
+        date_fin: formData.date_fin,
+      };
+
       if (editingId) {
-        await adminServiceV2.updateParticipation(editingId, formData);
+        await adminServiceV2.updateParticipation(editingId, submitData);
         alert('Participation mise à jour');
       } else {
-        await adminServiceV2.createParticipation(formData);
+        await adminServiceV2.createParticipation(submitData);
         alert('Participation créée');
       }
       setFormData({ formation_id: '', adherent_id: '', date_deb: '', date_fin: '' });
@@ -79,7 +89,8 @@ export default function AdminParticipations() {
       fetchParticipations();
     } catch (error) {
       console.error('Error saving participation:', error);
-      alert('Erreur lors de la sauvegarde');
+      const errorMsg = error.response?.data?.message || 'Erreur lors de la sauvegarde';
+      alert(errorMsg);
     }
   };
 
@@ -111,6 +122,8 @@ export default function AdminParticipations() {
     setShowModal(false);
     setEditingId(null);
     setFormData({ formation_id: '', adherent_id: '', date_deb: '', date_fin: '' });
+    setFormationSearch('');
+    setAdherentSearch('');
   };
 
   const handleLogout = () => {
@@ -225,19 +238,42 @@ export default function AdminParticipations() {
               </div>
               <div className="form-group">
                 <label>Adhérant*</label>
-                <select
-                  name="adherent_id"
-                  value={formData.adherent_id}
-                  onChange={handleInputChange}
-                  required
-                >
-                  <option value="">-- Sélectionner un adhérant --</option>
-                  {adherents.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.raison_sociale}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  type="text"
+                  placeholder="Tapez le numéro ou le nom (ex: 2 ou Entreprise 2)..."
+                  value={adherentSearch}
+                  onChange={async (e) => {
+                    const searchValue = e.target.value;
+                    setAdherentSearch(searchValue);
+                    if (searchValue.trim()) {
+                      try {
+                        const res = await adminServiceV2.searchEntreprises(searchValue);
+                        setFilteredAdherents(res.data);
+                      } catch (error) {
+                        console.error('Error searching enterprises:', error);
+                      }
+                    } else {
+                      setFilteredAdherents([]);
+                    }
+                  }}
+                />
+                {filteredAdherents.length > 0 && (
+                  <div style={{ border: '1px solid #ddd', maxHeight: '250px', overflowY: 'auto', marginTop: '5px', backgroundColor: 'white', zIndex: 10 }}>
+                    {filteredAdherents.map(a => (
+                      <div
+                        key={a.id}
+                        onClick={() => {
+                          setFormData({ ...formData, adherent_id: a.id });
+                          setAdherentSearch(a.raison_sociale);
+                          setFilteredAdherents([]);
+                        }}
+                        style={{ padding: '10px', cursor: 'pointer', borderBottom: '1px solid #eee', backgroundColor: formData.adherent_id === a.id ? '#e8f4f8' : 'white' }}
+                      >
+                        {a.raison_sociale}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="form-group">
                 <label>Date Début*</label>

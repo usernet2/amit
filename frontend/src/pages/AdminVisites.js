@@ -12,6 +12,8 @@ export default function AdminVisites() {
   const [visitType, setVisitType] = useState('entreprise');
   const [editingId, setEditingId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [adherentSearch, setAdherentSearch] = useState('');
+  const [filteredAdherents, setFilteredAdherents] = useState([]);
   const [formData, setFormData] = useState({
     adherent_id: '',
     date_heure: '',
@@ -25,12 +27,10 @@ export default function AdminVisites() {
 
   const fetchData = async () => {
     try {
-      const [visitesRes, adherantsRes] = await Promise.all([
-        adminServiceV2.getVisites(),
-        adminServiceV2.getEntreprises(),
-      ]);
+      const visitesRes = await adminServiceV2.getVisites();
       setVisites(visitesRes.data);
-      setAdherants(adherantsRes.data);
+      // Don't fetch all enterprises - search on demand
+      setAdherants([]);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -128,6 +128,8 @@ export default function AdminVisites() {
     setShowModal(false);
     setEditingId(null);
     setFormData({ adherent_id: '', date_heure: '', date_deb: '', date_fin: '' });
+    setAdherentSearch('');
+    setFilteredAdherents([]);
   };
 
   const handleLogout = () => {
@@ -284,19 +286,42 @@ export default function AdminVisites() {
 
               <div className="form-group">
                 <label>Adhérant*</label>
-                <select
-                  name="adherent_id"
-                  value={formData.adherent_id}
-                  onChange={handleInputChange}
-                  required
-                >
-                  <option value="">-- Sélectionner un adhérant --</option>
-                  {adherants.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.raison_sociale}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  type="text"
+                  placeholder="Tapez le numéro ou le nom (ex: 2 ou Entreprise 2)..."
+                  value={adherentSearch}
+                  onChange={async (e) => {
+                    const searchValue = e.target.value;
+                    setAdherentSearch(searchValue);
+                    if (searchValue.trim()) {
+                      try {
+                        const res = await adminServiceV2.searchEntreprises(searchValue);
+                        setFilteredAdherents(res.data);
+                      } catch (error) {
+                        console.error('Error searching enterprises:', error);
+                      }
+                    } else {
+                      setFilteredAdherents([]);
+                    }
+                  }}
+                />
+                {filteredAdherents.length > 0 && (
+                  <div style={{ border: '1px solid #ddd', maxHeight: '250px', overflowY: 'auto', marginTop: '5px', backgroundColor: 'white', zIndex: 10 }}>
+                    {filteredAdherents.map(a => (
+                      <div
+                        key={a.id}
+                        onClick={() => {
+                          setFormData({ ...formData, adherent_id: a.id });
+                          setAdherentSearch(a.raison_sociale);
+                          setFilteredAdherents([]);
+                        }}
+                        style={{ padding: '10px', cursor: 'pointer', borderBottom: '1px solid #eee', backgroundColor: formData.adherent_id === a.id ? '#e8f4f8' : 'white' }}
+                      >
+                        {a.raison_sociale}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {visitType === 'entreprise' ? (

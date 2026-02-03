@@ -177,3 +177,28 @@ exports.getStats = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
+// Search enterprises (for performance in forms)
+exports.search = async (req, res) => {
+  try {
+    const { q = '' } = req.query;
+    const connection = await pool.getConnection();
+
+    const [enterprises] = await connection.execute(`
+      SELECT 
+        a.id,
+        a.raison_sociale
+      FROM adherents a
+      WHERE a.raison_sociale LIKE ?
+      ORDER BY a.raison_sociale ASC
+      LIMIT 20
+    `, [`%${q}%`]);
+
+    connection.release();
+
+    res.status(200).json(enterprises);
+  } catch (error) {
+    console.error('Search enterprises error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};

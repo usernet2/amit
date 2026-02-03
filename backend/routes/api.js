@@ -14,9 +14,15 @@ const verifyToken = require('../middleware/auth');
 const { verifyAdmin, verifyMedecinChef, verifyAdherant, verifyAdminOrMedecin } = require('../middleware/auth');
 
 // ===== AUTH ROUTES =====
-router.post('/auth/register-adherent', authController.registerAdherent);
+router.use((req, res, next) => {
+  console.log(`[API] ${req.method} ${req.path}`);
+  next();
+});
+
+router.post('/auth/check-adherent', authController.checkAdherent);
+router.post('/auth/register-user', authController.registerUser);
 router.post('/auth/send-confirmation-code', authController.sendConfirmationCode);
-router.post('/auth/register-adherent-confirmed', authController.registerAdherentConfirmed);
+router.post('/auth/register-user-with-confirmation', authController.registerUserWithConfirmation);
 router.post('/auth/login', authController.login);
 router.post('/auth/forgot-password', authController.forgotPassword);
 router.post('/auth/reset-password', authController.resetPassword);
@@ -27,6 +33,7 @@ router.get('/admin/dashboard', verifyToken, verifyAdmin, adminDashboard.getDashb
 
 // ENTERPRISES (ADHÉRANTES) ROUTES
 router.get('/admin/entreprises', verifyToken, verifyAdmin, adminEntreprisesController.getAll);
+router.get('/admin/entreprises/search', verifyToken, adminEntreprisesController.search);
 router.get('/admin/entreprises/:id', verifyToken, verifyAdmin, adminEntreprisesController.getById);
 router.put('/admin/entreprises/:id', verifyToken, verifyAdmin, adminEntreprisesController.update);
 router.delete('/admin/entreprises/:id', verifyToken, verifyAdmin, adminEntreprisesController.delete);

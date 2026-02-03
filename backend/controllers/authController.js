@@ -1,81 +1,52 @@
 const pool = require('../config/database');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
 
-// Configure email service
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER || 'your-email@gmail.com',
-    pass: process.env.EMAIL_PASSWORD || 'your-app-password'
-  }
-});
-
-// Generate 6-digit confirmation code
-const generateConfirmationCode = () => {
-  return Math.floor(100000 + Math.random() * 900000).toString();
-};
-
-// Send confirmation code via email to enterprise
-exports.sendConfirmationCode = async (req, res) => {
+// Check if adherent exists by raison_sociale and tel
+exports.checkAdherent = async (req, res) => {
   try {
-    const { email, raison_sociale } = req.body; // email = emailEntreprise
+    const { raison_sociale, telephone } = req.body;
 
-    if (!email) {
-      return res.status(400).json({ message: 'Email required' });
+    if (!raison_sociale || !telephone) {
+      return res.status(400).json({ message: 'raison_sociale and telephone required' });
     }
 
     const connection = await pool.getConnection();
 
-    // Generate confirmation code
-    const code = generateConfirmationCode();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-    // Save code in database (tied to enterprise email)
-    await connection.execute(
-      'INSERT INTO confirmation_codes (email, code, expires_at) VALUES (?, ?, ?)',
-      [email, code, expiresAt]
+    const [adherents] = await connection.execute(
+      'SELECT id, raison_sociale, tel, contact FROM adherents WHERE raison_sociale = ? AND tel = ?',
+      [raison_sociale, telephone]
     );
 
     connection.release();
 
-    // Send email with code to enterprise email
-    const mailOptions = {
-      from: process.env.EMAIL_USER || 'noreply@amit.com',
-      to: email,
-      subject: `Code de Confirmation AMIT - ${code}`,
-      html: `
-        <h2>Bienvenue chez AMIT!</h2>
-        <p>Votre code de confirmation est: <strong>${code}</strong></p>
-        <p>Ce code expire dans 10 minutes.</p>
-        <p>Entreprise: ${raison_sociale}</p>
-        <p>Si vous n'avez pas demandé cet enregistrement, ignorez ce message.</p>
-      `
-    };
+    if (adherents.length === 0) {
+      return res.status(404).json({ message: 'Adherent not found', found: false });
+    }
 
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error('Email sending error:', error);
-        return res.status(500).json({ message: 'Error sending confirmation code', error: error.message });
-      }
-      res.status(200).json({ message: 'Confirmation code sent to email' });
+    const adherent = adherents[0];
+    res.status(200).json({ 
+      found: true, 
+      adherent_id: adherent.id,
+      raison_sociale: adherent.raison_sociale,
+      tel: adherent.tel,
+      contact: adherent.contact
     });
 
   } catch (error) {
-    console.error('Send confirmation code error:', error);
+    console.error('Check adherent error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
 
-// Register with confirmation code
-exports.registerAdherentConfirmed = async (req, res) => {
+// Register user with adherent_id
+exports.registerUser = async (req, res) => {
   try {
-    const { email, password, raison_sociale, siege, contact, telephone, dispensaire_id, confirmationCode } = req.body;
+    const { email, password, adherent_id } = req.body;
 
     // Validation
-    if (!email || !password || !raison_sociale || !contact || !telephone || !dispensaire_id || !confirmationCode) {
-      return res.status(400).json({ message: 'Missing required fields' });
+    if (!email || !password || !adherent_id) {
+      return res.status(400).json({ message: 'Missing required fields: email, password, adherent_id' });
     }
 
     // Email format validation
@@ -84,107 +55,14 @@ exports.registerAdherentConfirmed = async (req, res) => {
       return res.status(400).json({ message: 'Invalid email format' });
     }
 
-    if (!emailRegex.test(contact)) {
-      return res.status(400).json({ message: 'Invalid enterprise email format' });
-    }
-
     // Password length validation
     if (password.length < 8) {
       return res.status(400).json({ message: 'Password must be at least 8 characters' });
     }
 
     const connection = await pool.getConnection();
-
-    // Verify confirmation code - check against enterprise email (contact)
-    const [codes] = await connection.execute(
-      `SELECT * FROM confirmation_codes 
-       WHERE email = ? AND code = ? AND is_used = false AND expires_at > NOW()`,
-      [contact, confirmationCode]  // Verify code on enterprise email
-    );
-
-    if (codes.length === 0) {
-      connection.release();
-      return res.status(401).json({ message: 'Invalid or expired confirmation code' });
-    }
 
     // Check if user email already exists
-    const [existingUsers] = await connection.execute(
-      'SELECT id FROM users WHERE email = ?',
-      [email]  // Check user email
-    );
-
-    if (existingUsers.length > 0) {
-      connection.release();
-      return res.status(409).json({ message: 'Email already registered' });
-    }
-
-    // Verify centre exists
-    const [centres] = await connection.execute(
-      'SELECT id FROM centres WHERE id = ?',
-      [dispensaire_id]
-    );
-
-    if (centres.length === 0) {
-      connection.release();
-      return res.status(400).json({ message: 'Invalid centre' });
-    }
-
-    // Hash password
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Create user
-    const [userResult] = await connection.execute(
-      'INSERT INTO users (email, password, role) VALUES (?, ?, ?)',
-      [email, hashedPassword, 'adherent']
-    );
-
-    // Create adherent
-    await connection.execute(
-      `INSERT INTO adherents (raison_sociale, siege, contact, email, user_id, dispensaire_id)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [raison_sociale, siege || null, contact, telephone, userResult.insertId, dispensaire_id]
-    );
-
-    // Mark code as used
-    await connection.execute(
-      'UPDATE confirmation_codes SET is_used = true WHERE email = ? AND code = ?',
-      [contact, confirmationCode]  // Mark code used on enterprise email
-    );
-
-    connection.release();
-
-    res.status(201).json({ message: 'Account created successfully', userId: userResult.insertId });
-  } catch (error) {
-    console.error('Register with code error:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
-  }
-};
-
-// Register - UNIQUEMENT pour adhérants
-// ⚠️ BLOCAGE STRICTE : aucun autre rôle ne peut être créé via inscription
-exports.registerAdherent = async (req, res) => {
-  try {
-    const { email, password, raison_sociale, siege, contact, dispensaire_id } = req.body;
-
-    // Validation
-    if (!email || !password || !raison_sociale || !contact || !dispensaire_id) {
-      return res.status(400).json({ message: 'Missing required fields' });
-    }
-
-    // Email format validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Invalid email format' });
-    }
-
-    // Password length validation
-    if (password.length < 8) {
-      return res.status(400).json({ message: 'Password must be at least 8 characters' });
-    }
-
-    const connection = await pool.getConnection();
-
-    // Check if user exists
     const [existingUsers] = await connection.execute(
       'SELECT id FROM users WHERE email = ?',
       [email]
@@ -195,42 +73,38 @@ exports.registerAdherent = async (req, res) => {
       return res.status(409).json({ message: 'Email already registered' });
     }
 
-    // Verify centre exists
-    const [centres] = await connection.execute(
-      'SELECT id FROM centres WHERE id = ?',
-      [dispensaire_id]
+    // Verify adherent exists
+    const [adherents] = await connection.execute(
+      'SELECT id FROM adherents WHERE id = ?',
+      [adherent_id]
     );
 
-    if (centres.length === 0) {
+    if (adherents.length === 0) {
       connection.release();
-      return res.status(400).json({ message: 'Invalid centre' });
+      return res.status(404).json({ message: 'Adherent not found' });
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user - ALWAYS 'adherent' role, NO EXCEPTIONS
+    // Create user with adherent_id
     const [userResult] = await connection.execute(
-      'INSERT INTO users (email, password, role) VALUES (?, ?, ?)',
-      [email, hashedPassword, 'adherent']
-    );
-
-    // Create enterprise
-    await connection.execute(
-      'INSERT INTO adherents (raison_sociale, siege, contact, email, user_id, dispensaire_id) VALUES (?, ?, ?, ?, ?, ?)',
-      [raison_sociale.trim(), siege ? siege.trim() : null, contact.trim(), email, userResult.insertId, dispensaire_id]
+      'INSERT INTO users (email, password, role, adherent_id) VALUES (?, ?, ?, ?)',
+      [email, hashedPassword, 'adherent', adherent_id]
     );
 
     connection.release();
 
-    console.log(`✅ New adherent registered: ${email}`);
+    console.log(`✅ User registered: ${email} for adherent ${adherent_id}`);
 
     res.status(201).json({
-      message: 'Account created successfully. Please log in.',
+      message: 'Account created successfully',
       userId: userResult.insertId,
+      email: email
     });
+
   } catch (error) {
-    console.error('Register error:', error);
+    console.error('Register user error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
@@ -270,13 +144,13 @@ exports.login = async (req, res) => {
 
     if (user.role === 'adherent') {
       // Get enterprise info
-      const [adherents] = await connection.execute(
-        'SELECT id, raison_sociale FROM adherents WHERE user_id = ?',
+      const [adherants] = await connection.execute(
+        'SELECT id, raison_sociale FROM adherants WHERE user_id = ?',
         [user.id]
       );
-      if (adherents.length > 0) {
-        additionalData.adherentId = adherents[0].id;
-        additionalData.entreprise = adherents[0].raison_sociale;
+      if (adherants.length > 0) {
+        additionalData.adherentId = adherants[0].id;
+        additionalData.entreprise = adherants[0].raison_sociale;
       }
     } else if (user.role === 'medecin_chef') {
       additionalData.centreId = user.adherent_id;
@@ -343,6 +217,159 @@ exports.getProfile = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
+// Helper function to generate confirmation code
+function generateConfirmationCode() {
+  return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+// Send confirmation code to adherent email
+exports.sendConfirmationCode = async (req, res) => {
+  try {
+    const { adherent_id, adherent_email } = req.body;
+
+    if (!adherent_id || !adherent_email) {
+      return res.status(400).json({ message: 'adherent_id and adherent_email required' });
+    }
+
+    // Verify adherent exists
+    const connection = await pool.getConnection();
+    const [adherents] = await connection.execute(
+      'SELECT id FROM adherents WHERE id = ?',
+      [adherent_id]
+    );
+
+    if (adherents.length === 0) {
+      connection.release();
+      return res.status(404).json({ message: 'Adherent not found' });
+    }
+
+    // Generate confirmation code
+    const code = generateConfirmationCode();
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes
+
+    // Save code in database
+    await connection.execute(
+      'INSERT INTO confirmation_codes (email, code, expires_at) VALUES (?, ?, ?)',
+      [adherent_email, code, expiresAt]
+    );
+
+    connection.release();
+
+    // For development: return code in response
+    // In production, send via email
+    console.log(`📧 Confirmation code for ${adherent_email}: ${code}`);
+
+    res.status(200).json({
+      message: 'Confirmation code sent',
+      code: code, // Remove in production, use email instead
+      expiresIn: '15 minutes'
+    });
+
+  } catch (error) {
+    console.error('Send confirmation code error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+// Register user with confirmation code and update adherent email
+exports.registerUserWithConfirmation = async (req, res) => {
+  try {
+    const { email, password, adherent_id, adherent_email, confirmation_code } = req.body;
+
+    // Validation
+    if (!email || !password || !adherent_id || !adherent_email || !confirmation_code) {
+      return res.status(400).json({ message: 'Missing required fields: email, password, adherent_id, adherent_email, confirmation_code' });
+    }
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Invalid user email format' });
+    }
+    if (!emailRegex.test(adherent_email)) {
+      return res.status(400).json({ message: 'Invalid adherent email format' });
+    }
+
+    // Password length validation
+    if (password.length < 8) {
+      return res.status(400).json({ message: 'Password must be at least 8 characters' });
+    }
+
+    const connection = await pool.getConnection();
+
+    // Verify confirmation code
+    const [codes] = await connection.execute(
+      `SELECT * FROM confirmation_codes 
+       WHERE email = ? AND code = ? AND is_used = false AND expires_at > NOW()`,
+      [adherent_email, confirmation_code]
+    );
+
+    if (codes.length === 0) {
+      connection.release();
+      return res.status(401).json({ message: 'Invalid or expired confirmation code' });
+    }
+
+    // Check if user email already exists
+    const [existingUsers] = await connection.execute(
+      'SELECT id FROM users WHERE email = ?',
+      [email]
+    );
+
+    if (existingUsers.length > 0) {
+      connection.release();
+      return res.status(409).json({ message: 'Email already registered' });
+    }
+
+    // Verify adherent exists
+    const [adherents] = await connection.execute(
+      'SELECT id FROM adherents WHERE id = ?',
+      [adherent_id]
+    );
+
+    if (adherents.length === 0) {
+      connection.release();
+      return res.status(404).json({ message: 'Adherent not found' });
+    }
+
+    // Hash password
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Create user with adherent_id
+    const [userResult] = await connection.execute(
+      'INSERT INTO users (email, password, role, adherent_id) VALUES (?, ?, ?, ?)',
+      [email, hashedPassword, 'adherent', adherent_id]
+    );
+
+    // Update adherent's email
+    await connection.execute(
+      'UPDATE adherents SET email = ? WHERE id = ?',
+      [adherent_email, adherent_id]
+    );
+
+    // Mark confirmation code as used
+    await connection.execute(
+      'UPDATE confirmation_codes SET is_used = true WHERE email = ? AND code = ?',
+      [adherent_email, confirmation_code]
+    );
+
+    connection.release();
+
+    console.log(`✅ User registered: ${email} for adherent ${adherent_id} with email ${adherent_email}`);
+
+    res.status(201).json({
+      message: 'Account created successfully and adherent email updated',
+      userId: userResult.insertId,
+      email: email,
+      adherent_email: adherent_email
+    });
+
+  } catch (error) {
+    console.error('Register user with confirmation error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
 // Forgot password - send reset code
 exports.forgotPassword = async (req, res) => {
   try {

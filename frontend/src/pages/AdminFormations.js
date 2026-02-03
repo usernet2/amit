@@ -13,6 +13,9 @@ export default function AdminFormations() {
   const [formData, setFormData] = useState({
     designation: '',
     description: '',
+    date_deb: '',
+    date_fin: '',
+    is_valid: true,
   });
 
   useEffect(() => {
@@ -54,7 +57,7 @@ export default function AdminFormations() {
         await adminServiceV2.createFormation(formData);
         alert('Formation créée avec succès');
       }
-      setFormData({ designation: '', description: '' });
+      setFormData({ designation: '', description: '', date_deb: '', date_fin: '', is_valid: true });
       setEditingId(null);
       setShowModal(false);
       fetchFormations();
@@ -68,6 +71,9 @@ export default function AdminFormations() {
     setFormData({
       designation: formation.designation,
       description: formation.description,
+      date_deb: formation.date_deb || '',
+      date_fin: formation.date_fin || '',
+      is_valid: formation.is_valid || true,
     });
     setEditingId(formation.id);
     setShowModal(true);
@@ -89,7 +95,7 @@ export default function AdminFormations() {
   const handleCloseModal = () => {
     setShowModal(false);
     setEditingId(null);
-    setFormData({ designation: '', description: '' });
+    setFormData({ designation: '', description: '', date_deb: '', date_fin: '', is_valid: true });
   };
 
   const handleLogout = () => {
@@ -120,7 +126,7 @@ export default function AdminFormations() {
           <button
             className="btn-primary"
             onClick={() => {
-              setFormData({ designation: '', description: '' });
+              setFormData({ designation: '', description: '', date_deb: '', date_fin: '', is_valid: true });
               setEditingId(null);
               setShowModal(true);
             }}
@@ -138,6 +144,8 @@ export default function AdminFormations() {
               <tr>
                 <th>Designation</th>
                 <th>Description</th>
+                <th>Date Début</th>
+                <th>Date Fin</th>
                 <th>Statut</th>
                 <th>Actions</th>
               </tr>
@@ -147,6 +155,8 @@ export default function AdminFormations() {
                 <tr key={formation.id}>
                   <td>{formation.designation}</td>
                   <td>{formation.description}</td>
+                  <td>{formation.date_deb ? new Date(formation.date_deb).toLocaleDateString('fr-FR') : '-'}</td>
+                  <td>{formation.date_fin ? new Date(formation.date_fin).toLocaleDateString('fr-FR') : '-'}</td>
                   <td>
                     <span className={`status ${formation.is_valid ? 'active' : 'inactive'}`}>
                       {formation.is_valid ? 'Active' : 'Inactive'}
@@ -203,6 +213,35 @@ export default function AdminFormations() {
                   placeholder="Description détaillée"
                   rows="4"
                 />
+              </div>
+              <div className="form-group">
+                <label>Date de Début</label>
+                <input
+                  type="date"
+                  name="date_deb"
+                  value={formData.date_deb}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>Date de Fin</label>
+                <input
+                  type="date"
+                  name="date_fin"
+                  value={formData.date_fin}
+                  onChange={handleInputChange}
+                />
+              </div>
+              <div className="form-group">
+                <label>
+                  <input
+                    type="checkbox"
+                    name="is_valid"
+                    checked={formData.is_valid}
+                    onChange={(e) => setFormData({ ...formData, is_valid: e.target.checked })}
+                  />
+                  Formation active
+                </label>
               </div>
               <div className="modal-buttons">
                 <button type="submit" className="btn-primary">
